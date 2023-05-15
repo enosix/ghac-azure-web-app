@@ -20,11 +20,6 @@ inputs:
   package:
     required: false
 
-outputs:
-  version:
-    description: "Image Version"
-    value: ${{ steps.image.outputs.version }}
-
 runs:
   using: "composite"
   steps:  
