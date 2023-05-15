@@ -56,7 +56,7 @@ runs:
           publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ inputs.deployment_slot }} --xml) 
           app_url=$(echo $publish_profile | sed -nr 's/.*destinationAppUrl="([^"]+).*/\1/p')
           echo "publish_profile=$publish_profile" >> $GITHUB_OUTPUT
-          echo "url=$publish_profile" >> $GITHUB_OUTPUT
+          echo "url=$app_url" >> $GITHUB_OUTPUT
 
       - name: Update AD
         if:  "${{ inputs.ad_app_id != '' }}"
