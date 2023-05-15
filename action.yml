@@ -19,8 +19,6 @@ inputs:
     required: false
   package:
     required: false
-  slot:
-    default: true
 
 outputs:
   version:
