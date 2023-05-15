@@ -44,7 +44,7 @@ runs:
           exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ inputs.deployment_slot }}'].name" -o tsv)
           if [ -z "$exists" ]; then
               echo "Slot does not exist"
-              az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ inputs.deployment_slot }}
+              az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ inputs.deployment_slot }} --configuration-source ${{ inputs.azure_webapp_name }}
           else
               echo "Slot already exists"
           fi
