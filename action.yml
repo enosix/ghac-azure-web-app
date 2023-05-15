@@ -19,6 +19,8 @@ inputs:
     required: false
   package:
     required: false
+  ad_app_id:
+    required: false
 
 runs:
   using: "composite"
@@ -37,6 +39,7 @@ runs:
           
       - name: Create a new web app slot if it doesn't exist
         if: github.event_name == 'pull_request' || github.ref_type == 'tag'
+        shell: bash
         run: |
           exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ inputs.deployment_slot }}'].name" -o tsv)
           if [ -z "$exists" ]; then
@@ -55,6 +58,13 @@ runs:
           echo "publish_profile=$publish_profile" >> $GITHUB_OUTPUT
           echo "url=$publish_profile" >> $GITHUB_OUTPUT
 
+      - name: Update AD
+        if:  "${{ inputs.ad_app_id != '' }}"
+        shell: bash
+        run: |
+          uri='${{ steps.profile.outputs.url }}/signin-oidc'          
+          redirectUris=$(az ad app show --id ${{ inputs.ad_app_id }} | jq -c '.web.redirectUris + ["'$uri'"] | unique |  {"web": {"redirectUris": . }}')
+          az rest --method PATCH --uri 'https://graph.microsoft.com/v1.0/applications/${{ inputs.ad_app_id }}' --headers 'Content-Type=application/json' --body "$redirectUris"
       
       - name: 'Run Azure webapp deploy action using publish profile credentials'
         uses: azure/webapps-deploy@v2
