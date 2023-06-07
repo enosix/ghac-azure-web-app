@@ -41,10 +41,13 @@ runs:
         if: github.event_name == 'pull_request' || github.ref_type == 'tag'
         shell: bash
         run: |
-          exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ inputs.deployment_slot }}'].name" -o tsv)
+          slot_name=$(echo '${{ inputs.deployment_slot }}' | sed 's/[^A-Za-z0-9-]/-/g')
+          echo "slot_name=$slot_name" >> $GITHUB_ENV
+        
+          exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='$slot_name'].name" -o tsv)
           if [ -z "$exists" ]; then
               echo "Slot does not exist"
-              az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ inputs.deployment_slot }} --configuration-source ${{ inputs.azure_webapp_name }}
+              az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot $slot_name --configuration-source ${{ inputs.azure_webapp_name }}
           else
               echo "Slot already exists"
           fi
@@ -53,7 +56,7 @@ runs:
         shell: bash
         id: profile
         run: |
-          publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ inputs.deployment_slot }} --xml) 
+          publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ env.slot_name }} --xml) 
           app_url=$(echo $publish_profile | sed -nr 's/.*destinationAppUrl="([^"]+).*/\1/p')
           echo "publish_profile=${publish_profile}" >> $GITHUB_OUTPUT
           echo "url=${app_url/http:/https:}" >> $GITHUB_OUTPUT
@@ -71,7 +74,7 @@ runs:
         with:
           app-name: ${{ inputs.azure_webapp_name }}
           publish-profile: ${{ inputs.azure_webapp_publish_profile }}
-          slot-name: ${{ inputs.deployment_slot }}
+          slot-name: ${{ env.slot_name }}
           package: ${{ inputs.package }}
           images: ${{ inputs.image }}
           resource-group-name: ${{ inputs.resource_group }}
