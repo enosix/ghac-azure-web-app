@@ -36,15 +36,17 @@ runs:
               "tenantId": "${{ inputs.azure_tenant_id }}",
               "resourceManagerEndpointUrl": "https://management.azure.com/"
             }
-          
-      - name: Create a new web app slot if it doesn't exist
-        if: github.event_name == 'pull_request' || github.ref_type == 'tag'
+      - name: Clean names
         shell: bash
         run: |
           slot_name=$(echo '${{ inputs.deployment_slot }}' | sed 's/[^A-Za-z0-9-]/-/g')
           echo "slot_name=$slot_name" >> $GITHUB_ENV
-        
-          exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='$slot_name'].name" -o tsv)
+          
+      - name: Create a new web app slot if it doesn't exist
+        if: (github.event_name == 'pull_request' || github.ref_type == 'tag') && inputs.deployment_slot
+        shell: bash
+        run: |
+          exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ env.slot_name }}'].name" -o tsv)
           if [ -z "$exists" ]; then
               echo "Slot does not exist"
               az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot $slot_name --configuration-source ${{ inputs.azure_webapp_name }}
@@ -56,7 +58,11 @@ runs:
         shell: bash
         id: profile
         run: |
-          publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ env.slot_name }} --xml) 
+          if [ -z "${{ env.slot_name }}" ]; then
+            publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --xml) 
+          else
+            publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ env.slot_name }} --xml) 
+          fi
           app_url=$(echo $publish_profile | sed -nr 's/.*destinationAppUrl="([^"]+).*/\1/p')
           echo "publish_profile=${publish_profile}" >> $GITHUB_OUTPUT
           echo "url=${app_url/http:/https:}" >> $GITHUB_OUTPUT
