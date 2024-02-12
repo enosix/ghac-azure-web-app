@@ -1,5 +1,5 @@
-name: 'Docker Push to Github'
-description: 'Build and push an image to ghcr'
+name: 'Azure Web App Deploy'
+description: 'Deploy to Azure Web Apps'
 inputs:
   azure_client_id:
     description: 'Azure client id'
