@@ -2,24 +2,34 @@ name: 'Docker Push to Github'
 description: 'Build and push an image to ghcr'
 inputs:
   azure_client_id:
+    description: 'Azure client id'
     required: true
   azure_client_secret:
+    description: 'Azure client secret'
     required: true
   azure_subscription_id:
+    description: 'Azure subscription id'
     required: true
   azure_tenant_id:
+    description: 'Azure tenant id'
     required: true
   azure_webapp_name:
+    description: 'Azure webapp name'
     required: true
   resource_group:
+    description: 'Resource group'
     required: true
   deployment_slot:
+    description: 'Deployment slot'
     required: true
   image:
+    description: 'Image'
     required: false
   package:
+    description: 'Package'
     required: false
   ad_app_id:
+    description: 'Azure AD app id'
     required: false
 
 runs:
@@ -86,7 +96,7 @@ runs:
           resource-group-name: ${{ inputs.resource_group }}
           
       - uses: mshick/add-pr-comment@v2
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         with:
           message: |
             Your PR has been deployed to ${{ steps.profile.outputs.url }}

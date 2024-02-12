@@ -1,0 +1,63 @@
+name: Test and Tag
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag Name'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - 'dev'
+          - 'stable'
+
+env:
+  AZURE_AD_APP_ID: 451f36c7-ae84-4cdc-a13d-68c75f88fc8c
+  AZURE_WEBAPP_NAME: connect-admin-enosix
+  RESOURCE_GROUP: mgmt-dashboard
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  test-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Action
+        uses: ./
+        with:
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          azure_webapp_name: ${{ env.AZURE_WEBAPP_NAME }}
+          resource_group: ${{ env.RESOURCE_GROUP }}
+          deployment_slot: ghac-azure-web-app
+          ad_app_id: ${{ env.AZURE_AD_APP_ID }}
+          image: ghcr.io/enosix/connect-admin-ui:main
+      - name: Remove slot
+        run: |
+          az webapp deployment slot delete --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --slot ghac-azure-web-app
+      - name: Create tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.git.updateRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'tags/${{ github.event.inputs.tag }}',
+                sha: context.sha,
+              })
+            } catch (err) {
+              console.log(err)
+            
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'refs/tags/${{ github.event.inputs.tag }}',
+                sha: context.sha,
+              })
+            }
