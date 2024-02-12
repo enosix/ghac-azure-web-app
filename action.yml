@@ -53,7 +53,6 @@ runs:
           echo "slot_name=$slot_name" >> $GITHUB_ENV
           
       - name: Create a new web app slot if it doesn't exist
-        if: (github.event_name == 'pull_request' || github.ref_type == 'tag') && inputs.deployment_slot
         shell: bash
         run: |
           exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ env.slot_name }}'].name" -o tsv)
