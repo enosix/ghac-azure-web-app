@@ -56,12 +56,16 @@ runs:
         if: inputs.deployment_slot
         shell: bash
         run: |
-          exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ env.slot_name }}'].name" -o tsv)
-          if [ -z "$exists" ]; then
-              echo "Slot does not exist"
-              az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot $slot_name --configuration-source ${{ inputs.azure_webapp_name }}
+          if [ -z "$slot_name" ]; then 
+            exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ env.slot_name }}'].name" -o tsv)
+            if [ -z "$exists" ]; then
+                echo "Slot does not exist"
+                az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot $slot_name --configuration-source ${{ inputs.azure_webapp_name }}
+            else
+                echo "Slot already exists"
+            fi
           else
-              echo "Slot already exists"
+            echo "deploying to default slot"
           fi
           
       - name: Get publish profile
@@ -86,7 +90,7 @@ runs:
           az rest --method PATCH --uri 'https://graph.microsoft.com/v1.0/applications/${{ inputs.ad_app_id }}' --headers 'Content-Type=application/json' --body "$redirectUris"
       
       - name: 'Run Azure webapp deploy action using publish profile credentials'
-        uses: azure/webapps-deploy@v2
+        uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ inputs.azure_webapp_name }}
           publish-profile: ${{ inputs.azure_webapp_publish_profile }}
