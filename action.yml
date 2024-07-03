@@ -57,6 +57,8 @@ runs:
         shell: bash
         run: |
           if [ -z "$slot_name" ]; then 
+            echo "deploying to default slot"
+          else
             exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ env.slot_name }}'].name" -o tsv)
             if [ -z "$exists" ]; then
                 echo "Slot does not exist"
@@ -64,8 +66,6 @@ runs:
             else
                 echo "Slot already exists"
             fi
-          else
-            echo "deploying to default slot"
           fi
           
       - name: Get publish profile
