@@ -31,6 +31,9 @@ inputs:
   ad_app_id:
     description: 'Azure AD app id'
     required: false
+  env_vars:
+    description: 'Environment Variables'
+    requied: false
 
 runs:
   using: "composite"
@@ -98,6 +101,22 @@ runs:
           package: ${{ inputs.package }}
           images: ${{ inputs.image }}
           resource-group-name: ${{ inputs.resource_group }}
+
+      - name: Add Environment Variables
+        if: "${{ inputs.env_vars != '' }}"
+        run: |
+          if [ -n "${slot_name:-}" ]; then
+            az webapp config appsettings set \
+              --name "${{ inputs.azure_webapp_name }}" \
+              --resource-group "${{ inputs.resource_group }}" \
+              --slot "$slot_name" \
+              --settings ${{ inputs.env_vars }}
+          else
+            az webapp config appsettings set \
+              --name "${{ inputs.azure_webapp_name }}" \
+              --resource-group "${{ inputs.resource_group }}" \
+              --settings ${{ inputs.env_vars }}
+          fi
           
       - uses: mshick/add-pr-comment@v2
         if: always() && github.event_name == 'pull_request'
