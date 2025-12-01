@@ -56,8 +56,8 @@ runs:
           echo "slot_name=$slot_name" >> $GITHUB_ENV
           
       - name: Create a new web app slot if it doesn't exist
-        if: inputs.deployment_slot
         shell: bash
+        if: inputs.deployment_slot
         run: |
           if [ -z "$slot_name" ]; then 
             echo "deploying to default slot"
@@ -103,6 +103,7 @@ runs:
           resource-group-name: ${{ inputs.resource_group }}
 
       - name: Add Environment Variables
+        shell: bash
         if: "${{ inputs.env_vars != '' }}"
         run: |
           if [ -n "${slot_name:-}" ]; then
