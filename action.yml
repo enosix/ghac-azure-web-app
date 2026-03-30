@@ -6,7 +6,7 @@ inputs:
     required: true
   azure_client_secret:
     description: 'Azure client secret'
-    required: true
+    required: false
   azure_subscription_id:
     description: 'Azure subscription id'
     required: true
@@ -39,6 +39,7 @@ runs:
   using: "composite"
   steps:  
       - name: Azure login
+        if: inputs.azure_client_secret
         uses: azure/login@v2
         with:
           creds: |
@@ -49,6 +50,14 @@ runs:
               "tenantId": "${{ inputs.azure_tenant_id }}",
               "resourceManagerEndpointUrl": "https://management.azure.com/"
             }
+      - name: Azure login (OIDC)
+        if: !inputs.azure_client_secret
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azure_client_id }}
+          tenant-id: ${{ inputs.azure_tenant_id }}
+          subscription-id: ${{ inputs.azure_subscription_id }}
+
       - name: Clean names
         shell: bash
         run: |
@@ -118,12 +127,17 @@ runs:
               --resource-group "${{ inputs.resource_group }}" \
               --settings ${{ inputs.env_vars }}
           fi
-          
-      - uses: mshick/add-pr-comment@v2
-        if: always() && github.event_name == 'pull_request'
+
+      - name: Add Success Message 
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          APP_URL: ${{ steps.profile.outputs.url }}
         with:
-          message: |
-            Your PR has been deployed to ${{ steps.profile.outputs.url }}
-          message-failure: |
-            Your PR failed to deploy. Please check the logs.
-          refresh-message-position: true
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `Your PR has been deployed to [${process.env.APP_URL}](${process.env.APP_URL})`
+            })
