@@ -100,7 +100,7 @@ runs:
           az webapp identity assign --name ${{ inputs.azure_webapp_name }} ${{ steps.names.outputs.slot_args }} \
             --resource-group ${{ inputs.resource_group }}
           
-          principal_id=$(az webapp identity show --name ${{ inputs.azure_webapp_name }} ${{ steps.names.outputs.slot_args }}
+          principal_id=$(az webapp identity show --name ${{ inputs.azure_webapp_name }} ${{ steps.names.outputs.slot_args }} \
             --resource-group ${{ inputs.resource_group }} --query principalId -o tsv)
 
           if [ -z "$principal_id" ]; then
@@ -184,7 +184,7 @@ runs:
         shell: bash
         if: "${{ inputs.env_vars != '' }}"
         run: |
-          az webapp config appsettings set --name "${{ inputs.azure_webapp_name }}" ${{ steps.names.outputs.slot_args }} 
+          az webapp config appsettings set --name "${{ inputs.azure_webapp_name }}" ${{ steps.names.outputs.slot_args }} \
             --resource-group "${{ inputs.resource_group }}" --settings ${{ inputs.env_vars }}
 
       - name: Add Success Message
