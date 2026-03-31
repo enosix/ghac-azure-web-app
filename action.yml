@@ -33,7 +33,16 @@ inputs:
     required: false
   env_vars:
     description: 'Environment Variables'
-    requied: false
+    required: false
+  enable_managed_identity:
+    description: 'If true, assign a system managed identity to the webapp and apply roles provided in managed_identity_roles (true/false)'
+    required: false
+    default: 'false'
+  managed_identity_roles:
+    description: |
+      'JSON array of role assignments. Each entry must be an object with "role" and "scope" fields.
+      Example: [{"role":"AcrPull","scope":"/subscriptions/.../resourceGroups/rg/providers/Microsoft.ContainerRegistry/registries/registryname"}]'
+    required: false
 
 runs:
   using: "composite"
@@ -60,35 +69,95 @@ runs:
 
       - name: Clean names
         shell: bash
+        id: names
         run: |
           slot_name=$(echo '${{ inputs.deployment_slot }}' | sed 's/[^A-Za-z0-9-]/-/g')
           echo "slot_name=$slot_name" >> $GITHUB_ENV
           
-      - name: Create a new web app slot if it doesn't exist
-        shell: bash
-        if: inputs.deployment_slot
-        run: |
-          if [ -z "$slot_name" ]; then 
-            echo "deploying to default slot"
-          else
-            exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ env.slot_name }}'].name" -o tsv)
-            if [ -z "$exists" ]; then
-                echo "Slot does not exist"
-                az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot $slot_name --configuration-source ${{ inputs.azure_webapp_name }}
-            else
-                echo "Slot already exists"
-            fi
+          if [ -n "$slot_name" ]; then
+            echo "slot_args=--slot $slot_name" >> $GITHUB_OUTPUT
           fi
           
+      - name: Create a new web app slot if it doesn't exist
+        shell: bash
+        if: env.slot_name != ''
+        run: |
+          exists=$(az webapp deployment slot list --name ${{ inputs.azure_webapp_name }} \
+            --resource-group ${{ inputs.resource_group }} --query "[?name=='${{ env.slot_name }}'].name" -o tsv)
+        
+          if [ -z "$exists" ]; then
+              echo "Slot does not exist"
+              az webapp deployment slot create --name ${{ inputs.azure_webapp_name }} \
+                --resource-group ${{ inputs.resource_group }} --slot $slot_name --configuration-source ${{ inputs.azure_webapp_name }}
+          else
+              echo "Slot already exists"
+          fi
+
+      - name: Add Managed Identity
+        if: inputs.enable_managed_identity == 'true'
+        shell: bash
+        run: |
+          az webapp identity assign --name ${{ inputs.azure_webapp_name }} ${{ steps.names.outputs.slot_args }} \
+            --resource-group ${{ inputs.resource_group }}
+          
+          principal_id=$(az webapp identity show --name ${{ inputs.azure_webapp_name }} ${{ steps.names.outputs.slot_args }}
+            --resource-group ${{ inputs.resource_group }} --query principalId -o tsv)
+
+          if [ -z "$principal_id" ]; then
+            echo "ERROR: could not determine principalId for webapp" >&2
+            exit 1
+          fi
+          
+          echo "PrincipalId: $principal_id"
+          echo "PRINCIPAL_ID=$principal_id" >> $GITHUB_ENV
+
+      - name: Assign roles
+        if: ${{ inputs.enable_managed_identity == 'true' && inputs.managed_identity_roles != '' && env.PRINCIPAL_ID != '' }}
+        shell: bash
+        env:
+          ROLES_JSON: '${{ inputs.managed_identity_roles }}'
+          TIMEOUT: 300
+          INTERVAL: 10
+        run: |
+          max_attempts=$((TIMEOUT / INTERVAL))
+
+          while read -r entry; do
+            role=$(echo "$entry" | jq -r '.role')
+            scope=$(echo "$entry" | jq -r '.scope')
+            if [ -z "$role" ] || [ -z "$scope" ] || [ "$role" = "null" ] || [ "$scope" = "null" ]; then
+              echo "Skipping invalid entry: $entry"
+              continue
+            fi
+
+            echo "Assigning role '$role' on scope '$scope' to principal $PRINCIPAL_ID"
+
+            for ((i=1;i<=max_attempts;i++)); do
+              if az role assignment create --assignee "$PRINCIPAL_ID" --role "$role" --scope "$scope" 2>/dev/null; then
+                echo "Assigned role: $role"
+                break
+              fi
+              if [ $i -eq $max_attempts ]; then
+                echo "ERROR: Failed to assign $role within ${TIMEOUT}s" >&2
+                exit 1
+              fi
+              echo "Retrying role assignment ($i/$max_attempts)..."
+              sleep $INTERVAL
+            done
+          
+            if [ "$role" = "AcrPull" ]; then 
+              # AcrPull role requires webapp config update to use the managed identity creds, so do that immediately after assignment
+              az webapp config set --name ${{ inputs.azure_webapp_name }} ${{ steps.names.outputs.slot_args }} \
+                --resource-group ${{ inputs.resource_group }} --generic-configurations '{"acrUseManagedIdentityCreds": true}'
+            fi
+          done < <(echo "$ROLES_JSON" | jq -c '.[]')
+
       - name: Get publish profile
         shell: bash
         id: profile
         run: |
-          if [ -z "${{ env.slot_name }}" ]; then
-            publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --xml) 
-          else
-            publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} --resource-group ${{ inputs.resource_group }} --slot ${{ env.slot_name }} --xml) 
-          fi
+          publish_profile=$(az webapp deployment list-publishing-profiles --name ${{ inputs.azure_webapp_name }} \
+              --resource-group ${{ inputs.resource_group }} ${{ steps.names.outputs.slot_args }}  --xml) 
+          
           app_url=$(echo $publish_profile | sed -nr 's/.*destinationAppUrl="([^"]+).*/\1/p')
           echo "publish_profile=${publish_profile}" >> $GITHUB_OUTPUT
           echo "url=${app_url/http:/https:}" >> $GITHUB_OUTPUT
@@ -101,7 +170,7 @@ runs:
           redirectUris=$(az ad app show --id ${{ inputs.ad_app_id }} | jq -c '.web.redirectUris + ["'$uri'"] | unique |  {"web": {"redirectUris": . }}')
           az rest --method PATCH --uri 'https://graph.microsoft.com/v1.0/applications/${{ inputs.ad_app_id }}' --headers 'Content-Type=application/json' --body "$redirectUris"
       
-      - name: 'Run Azure webapp deploy action using publish profile credentials'
+      - name: Run Azure webapp deploy action using publish profile credentials
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ inputs.azure_webapp_name }}
@@ -115,20 +184,10 @@ runs:
         shell: bash
         if: "${{ inputs.env_vars != '' }}"
         run: |
-          if [ -n "${slot_name:-}" ]; then
-            az webapp config appsettings set \
-              --name "${{ inputs.azure_webapp_name }}" \
-              --resource-group "${{ inputs.resource_group }}" \
-              --slot "$slot_name" \
-              --settings ${{ inputs.env_vars }}
-          else
-            az webapp config appsettings set \
-              --name "${{ inputs.azure_webapp_name }}" \
-              --resource-group "${{ inputs.resource_group }}" \
-              --settings ${{ inputs.env_vars }}
-          fi
+          az webapp config appsettings set --name "${{ inputs.azure_webapp_name }}" ${{ steps.names.outputs.slot_args }} 
+            --resource-group "${{ inputs.resource_group }}" --settings ${{ inputs.env_vars }}
 
-      - name: Add Success Message 
+      - name: Add Success Message
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         env:
