@@ -187,7 +187,7 @@ runs:
         run: |
           uri="${STEPS_PROFILE_OUTPUTS_URL}/signin-oidc"          
           redirectUris=$(az ad app show --id ${INPUTS_AD_APP_ID} | jq -c '.web.redirectUris + ["'$uri'"] | unique |  {"web": {"redirectUris": . }}')
-          az rest --method PATCH --uri 'https://graph.microsoft.com/v1.0/applications/${INPUTS_AD_APP_ID}' --headers 'Content-Type=application/json' --body "$redirectUris"
+          az rest --method PATCH --uri "https://graph.microsoft.com/v1.0/applications/${INPUTS_AD_APP_ID}" --headers 'Content-Type=application/json' --body "$redirectUris"
         env:
           STEPS_PROFILE_OUTPUTS_URL: ${{ steps.profile.outputs.url }}
           INPUTS_AD_APP_ID: ${{ inputs.ad_app_id }}
