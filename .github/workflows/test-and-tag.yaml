@@ -24,6 +24,7 @@ on:
 permissions:
   contents: write
   packages: read
+  pull-requests: write
 
 env:
   AZURE_AD_APP_ID: 451f36c7-ae84-4cdc-a13d-68c75f88fc8c
