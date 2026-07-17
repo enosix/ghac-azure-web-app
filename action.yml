@@ -71,7 +71,7 @@ runs:
         shell: bash
         id: names
         run: |
-          slot_name=$(echo '${INPUTS_DEPLOYMENT_SLOT}' | sed 's/[^A-Za-z0-9-]/-/g')
+          slot_name=$(echo "${INPUTS_DEPLOYMENT_SLOT}" | sed 's/[^A-Za-z0-9-]/-/g')
           echo "slot_name=$slot_name" >> $GITHUB_OUTPUT
           
           if [ -n "$slot_name" ]; then
@@ -185,7 +185,7 @@ runs:
         if:  "${{ inputs.ad_app_id != '' }}"
         shell: bash
         run: |
-          uri='${STEPS_PROFILE_OUTPUTS_URL}/signin-oidc'          
+          uri="${STEPS_PROFILE_OUTPUTS_URL}/signin-oidc"          
           redirectUris=$(az ad app show --id ${INPUTS_AD_APP_ID} | jq -c '.web.redirectUris + ["'$uri'"] | unique |  {"web": {"redirectUris": . }}')
           az rest --method PATCH --uri 'https://graph.microsoft.com/v1.0/applications/${INPUTS_AD_APP_ID}' --headers 'Content-Type=application/json' --body "$redirectUris"
         env:
