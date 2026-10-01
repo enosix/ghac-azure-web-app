@@ -49,7 +49,7 @@ runs:
   steps:  
       - name: Azure login
         if: inputs.azure_client_secret != ''
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         with:
           creds: |
             {
@@ -61,7 +61,7 @@ runs:
             }
       - name: Azure login (OIDC)
         if: inputs.azure_client_secret == ''
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         with:
           client-id: ${{ inputs.azure_client_id }}
           tenant-id: ${{ inputs.azure_tenant_id }}
@@ -185,9 +185,22 @@ runs:
         if:  "${{ inputs.ad_app_id != '' }}"
         shell: bash
         run: |
-          uri="${STEPS_PROFILE_OUTPUTS_URL}/signin-oidc"          
-          redirectUris=$(az ad app show --id ${INPUTS_AD_APP_ID} | jq -c '.web.redirectUris + ["'$uri'"] | unique |  {"web": {"redirectUris": . }}')
-          az rest --method PATCH --uri "https://graph.microsoft.com/v1.0/applications/${INPUTS_AD_APP_ID}" --headers 'Content-Type=application/json' --body "$redirectUris"
+          if [ -z "$STEPS_PROFILE_OUTPUTS_URL" ]; then
+            echo "ERROR: could not determine the web app URL" >&2
+            exit 1
+          fi
+
+          uri="${STEPS_PROFILE_OUTPUTS_URL}/signin-oidc"
+          application=$(az ad app show --id "$INPUTS_AD_APP_ID")
+          application_object_id=$(jq -er '.id' <<< "$application")
+          redirect_uris=$(jq -c --arg uri "$uri" \
+            '{web: {redirectUris: ((.web.redirectUris // []) + [$uri] | unique)}}' \
+            <<< "$application")
+
+          az rest --method PATCH \
+            --uri "https://graph.microsoft.com/v1.0/applications/${application_object_id}" \
+            --headers 'Content-Type=application/json' \
+            --body "$redirect_uris"
         env:
           STEPS_PROFILE_OUTPUTS_URL: ${{ steps.profile.outputs.url }}
           INPUTS_AD_APP_ID: ${{ inputs.ad_app_id }}
